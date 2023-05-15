@@ -46,20 +46,91 @@ CREATE TABLE runner_orders_post
     
 SELECT 
     runner_id,
-    AVG(MINUTE(TIMEDIFF(r.pick_up_time, c.order_time))) AS time_mins
+    ROUND(AVG(MINUTE(TIMEDIFF(r.pick_up_time, c.order_time))),2) AS time_mins
 FROM
     runner_orders_post r
         JOIN
     customer_orders c ON r.order_id = c.order_id
-GROUP BY runner_id
+GROUP BY runner_id;
 
 
 
 -- Is there any relationship between the number of pizzas and how long the order takes to prepare?
 
+SELECT 
+    c.order_id,
+    ROUND(AVG(MINUTE(TIMEDIFF(r.pick_up_time, c.order_time))),2) AS avg_time_mins,
+    COUNT(c.order_id) AS num_of_pz
+FROM
+    runner_orders_post r
+JOIN
+    customer_orders c ON r.order_id = c.order_id
+WHERE
+    duration_mins IS NOT NULL
+GROUP BY c.order_id
+ORDER BY num_of_pz;
 
+-- Yes, the more pizzas in the order, the more time it need to prepare.
 
 -- What was the average distance travelled for each customer?
+
+SELECT 
+    c.customer_id, ROUND(AVG(distance_km), 2) AS avg_distance_km
+FROM
+    customer_orders c
+        JOIN
+    runner_orders_post r ON r.order_id = c.order_id
+WHERE
+    distance_km != 0
+GROUP BY c.customer_id;
+
 -- What was the difference between the longest and shortest delivery times for all orders?
+
+SELECT 
+    MAX(duration_mins) - MIN(duration_mins) AS time_diff_mins
+FROM
+    runner_orders_post;
+
 -- What was the average speed for each runner for each delivery and do you notice any trend for these values?
+-- hypothesis 1: the more pizza in the order, the more time needed for delivery
+SELECT 
+    *,
+    AVG(r.duration_mins) AS avg_speed,
+    COUNT(c.order_id) AS pz_amount
+FROM
+    runner_orders_post r
+        JOIN
+    customer_orders c ON r.order_id = c.order_id
+GROUP BY r.runner_id , r.order_id
+ORDER BY pz_amount;
+-- there are no colleration.
+
+-- hypothesis 2: the more far away the customer, the more time needed to deliver the pizzas.
+SELECT 
+    r.order_id,
+    r.runner_id,
+    ROUND(AVG(r.duration_mins), 2) AS avg_speed,
+    distance_km
+FROM
+    runner_orders_post r
+        JOIN
+    customer_orders c ON r.order_id = c.order_id
+WHERE
+    distance_km != 0
+GROUP BY r.runner_id , c.order_id
+ORDER BY r.runner_id , r.distance_km , avg_speed; 
+-- Yes there is a colleration.
+
 -- What is the successful delivery percentage for each runner?
+
+SELECT 
+    runner_id,
+    CONCAT(ROUND(SUM(CASE
+                        WHEN cancellation IS NULL THEN 1
+                        ELSE 0
+                    END) / COUNT(runner_id) * 100,
+                    2),
+            '%') AS successful_rate
+FROM
+    runner_orders_post
+GROUP BY runner_id
